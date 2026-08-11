@@ -1,0 +1,25 @@
+{
+  "name": "higgsfield-brief-to-pipeline",
+  "version": "1.0.0",
+  "description": "Turns a brief plus a folder of reference images into an optimal, credit-aware Higgsfield pipeline. Shows an HTML process preview as a mandatory approval gate before spending any credits, then executes stage-by-stage with auto-verification, human gates, and zero-credit deterministic text/dimension overlays.",
+  "skills": "./skills/",
+  "author": {
+    "name": "lucasyhzhu-debug",
+    "url": "https://github.com/lucasyhzhu-debug"
+  },
+  "homepage": "https://github.com/lucasyhzhu-debug/higgsfield-brief-to-pipeline",
+  "repository": "https://github.com/lucasyhzhu-debug/higgsfield-brief-to-pipeline",
+  "license": "MIT",
+  "keywords": [
+    "higgsfield",
+    "generative-ai",
+    "image-generation",
+    "video-generation",
+    "orchestration",
+    "cost-optimization",
+    "nano-banana",
+    "seedance",
+    "flux-kontext",
+    "workflow"
+  ]
+}

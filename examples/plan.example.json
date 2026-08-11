@@ -1,0 +1,100 @@
+{
+  "project": "Retail Kiosk Reskin v1",
+  "brief_summary": "Reskin an existing modular retail kiosk in a new brand identity and deliver dimensioned front/rear elevation specs plus one photorealistic in-location composite for the landlord submission. Structure is fixed; only colour, finish and branding change.",
+  "theme": { "accent": "#26303f", "gold": "#c98a2e" },
+
+  "deliverables": [
+    { "name": "front elevation (dimensioned)", "count": 1, "format": "orthographic, 4:3, 2k" },
+    { "name": "rear elevation (dimensioned)", "count": 1, "format": "orthographic, 4:3, 2k" },
+    { "name": "in-location composite", "count": 1, "format": "photoreal, mall-photo aspect, 4k" },
+    { "name": "annotated change-callout sheet", "count": 1, "format": "overlay on front elevation" }
+  ],
+
+  "references": [
+    { "file": "kiosk_front.jpeg", "role": "structure", "stages": "1,2", "note": "replicate geometry + proportions 1:1" },
+    { "file": "material_oak.jpg", "role": "material", "stages": "2", "note": "timber slat finish" },
+    { "file": "brand_moodboard.png", "role": "style-DNA", "stages": "2", "note": "palette + signage feel only" },
+    { "file": "wordmark.png", "role": "logo", "stages": "2", "note": "apply unaltered, do not retype" },
+    { "file": "mall_atrium.jpg", "role": "scene", "stages": "4", "note": "measure aspect before rendering" }
+  ],
+
+  "models": [
+    { "need": "validation render", "model": "nano_banana_2", "credits": "~2", "why": "cheapest way to prove orthographic holds" },
+    { "need": "spec elevations", "model": "nano_banana_2", "credits": "~2/img", "why": "best multi-image identity + structure fusion" },
+    { "need": "in-location composite", "model": "nano_banana_2", "credits": "~4 @ 4k", "why": "same engine keeps identity across the composite" }
+  ],
+
+  "stages": [
+    {
+      "n": "1",
+      "name": "Validation render (throwaway)",
+      "model": "nano_banana_2",
+      "params": "2k 4:3",
+      "refs": ["kiosk_front=structure"],
+      "variants": 1,
+      "verify": ["true orthographic — no vanishing point", "full kiosk in frame", "plain neutral background"],
+      "credits": 2,
+      "gate": "",
+      "derives_from": "-"
+    },
+    {
+      "n": "2",
+      "name": "Front elevation (ANCHOR)",
+      "model": "nano_banana_2",
+      "params": "2k 4:3",
+      "refs": ["kiosk_front=structure", "material_oak=material", "brand_moodboard=style-DNA", "wordmark=logo"],
+      "variants": 4,
+      "verify": ["orthographic held", "counter step + shelf count unchanged", "palette matches hex", "wordmark legible and correctly spelled"],
+      "credits": 8,
+      "gate": "HUMAN — pick 1; it becomes the identity reference for every later stage",
+      "derives_from": "-"
+    },
+    {
+      "n": "3",
+      "name": "Rear elevation (derived)",
+      "model": "nano_banana_2",
+      "params": "2k 4:3",
+      "refs": ["stage2_approved=IDENTITY", "kiosk_front=format"],
+      "variants": 2,
+      "verify": ["materials/palette match the anchor exactly", "front signage not duplicated on the back", "same framing + scale as stage 2"],
+      "credits": 4,
+      "gate": "",
+      "derives_from": "2"
+    },
+    {
+      "n": "4",
+      "name": "In-location composite",
+      "model": "nano_banana_2",
+      "params": "4k, aspect measured from mall_atrium.jpg",
+      "refs": ["stage2_approved=SUBJECT", "mall_atrium=BACKGROUND SCENE"],
+      "variants": 2,
+      "verify": ["scene architecture unaltered", "perspective matches the atrium's vanishing lines", "grounded contact shadow", "lighting colour-temperature matched"],
+      "credits": 8,
+      "gate": "HUMAN — landlord-facing, confirm placement before overlays",
+      "derives_from": "2"
+    },
+    {
+      "n": "5",
+      "name": "Dimensions + change callouts",
+      "model": "overlay.py (deterministic)",
+      "params": "dims + annotate",
+      "refs": ["stage2_approved", "stage3_approved"],
+      "variants": 0,
+      "verify": ["every dimension matches the measured spec", "no text was typed by an image model", "callout leaders land on the right features"],
+      "credits": 0,
+      "gate": "",
+      "derives_from": "2,3"
+    }
+  ],
+
+  "optimizations": [
+    "One cheap 2k validation render before any batch — proves the orthographic constraint holds",
+    "Independent renders launched as background processes and polled, never serialized with --wait",
+    "Derive, don't regenerate: the stage-2 anchor feeds every downstream stage as image-1 identity",
+    "One change per re-roll on a FAIL, capped at 2 retries per stage",
+    "All dimensions and labels composited with overlay.py — 0 credits, no misspellings",
+    "2k everywhere except the single 4k hero composite"
+  ],
+
+  "credit_estimate": { "min": 22, "max": 30, "budget": 200 }
+}

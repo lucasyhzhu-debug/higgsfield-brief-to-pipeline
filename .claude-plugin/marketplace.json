@@ -1,0 +1,27 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "higgsfield-brief-to-pipeline",
+  "description": "Credit-aware orchestration for Higgsfield generative image/video batches — plan first, approve an HTML gate, then render with auto-verification.",
+  "owner": {
+    "name": "lucasyhzhu-debug",
+    "url": "https://github.com/lucasyhzhu-debug"
+  },
+  "plugins": [
+    {
+      "name": "higgsfield-brief-to-pipeline",
+      "description": "Turns a brief plus a folder of reference images into an optimal, credit-aware Higgsfield pipeline. Shows an HTML process preview as a mandatory approval gate before spending any credits, then executes stage-by-stage with auto-verification, human gates, and zero-credit deterministic text/dimension overlays.",
+      "source": "./plugins/higgsfield-brief-to-pipeline",
+      "category": "productivity",
+      "tags": [
+        "higgsfield",
+        "generative-ai",
+        "image-generation",
+        "video-generation",
+        "orchestration",
+        "cost-optimization",
+        "nano-banana",
+        "workflow"
+      ]
+    }
+  ]
+}

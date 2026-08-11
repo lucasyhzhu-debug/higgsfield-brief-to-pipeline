@@ -1,0 +1,11 @@
+# Normalize all text to LF in the repository and on checkout.
+# Authored on Windows; contributors are mostly not.
+* text=auto eol=lf
+
+# Explicit, so a stray editor setting cannot reintroduce CRLF.
+*.md      text eol=lf
+*.py      text eol=lf
+*.json    text eol=lf
+*.txt     text eol=lf
+LICENSE   text eol=lf
+.gitignore text eol=lf

@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.0.2 — 2026-08-11
+
+**Fix: YAML frontmatter did not parse — all skill metadata was silently dropped.**
+
+The `description` was an unquoted plain scalar containing `Triggers: "…"`. A colon
+followed by a space is not legal inside a plain YAML scalar, so the whole frontmatter
+block failed to parse and `name`, `description`, and `allowed-tools` were all discarded
+at load time — meaning the skill ran without its declared tool restriction. Present since
+the skill was first written; surfaced by `claude plugin validate`, which a runtime smoke
+test cannot catch. Now a folded block scalar (`>-`), with the trigger phrasing intact.
+
+**The skill is also now self-testable from any install.**
+
+`plan.example.json` moved from the repo root into the skill itself
+(`skills/higgsfield-brief-to-pipeline/examples/`). It previously shipped only in the repo,
+so a plugin user had no bundled plan to render and no offline way to confirm the toolchain
+worked — a fresh-session smoke test could verify the scripts were *found* but not that they
+*ran*.
+
+- New **Self-test** section in `SKILL.md`: one command, 0 credits, no Higgsfield account.
+- Added to the quick-reference table, and cited as the `plan.json` shape reference alongside
+  the schema docstring.
+- `.gitignore` made path-agnostic for generated preview HTML.
+
+No changes to the pipeline protocol, prompting guidance, or either script.
+
 ## 1.0.1 — 2026-08-11
 
 **Fix: script paths did not resolve under a real plugin install.**

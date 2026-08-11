@@ -115,15 +115,18 @@ plugins/higgsfield-brief-to-pipeline/skills/higgsfield-brief-to-pipeline/
   scripts/
     build_plan_html.py              plan.json → the approval gate (stdlib only, themeable)
     overlay.py                      dims | annotate — 0-credit text & dimension compositing
-examples/
-  plan.example.json                 a complete 5-stage plan you can render immediately
+  examples/
+    plan.example.json               a complete 5-stage plan; also the plan.json shape reference
 ```
+
+The example ships **inside the skill**, so the toolchain is self-testable from any install without
+cloning this repo — see the *Self-test* section of `SKILL.md`.
 
 Try the gate right now, no Higgsfield account needed:
 
 ```bash
-python plugins/higgsfield-brief-to-pipeline/skills/higgsfield-brief-to-pipeline/scripts/build_plan_html.py \
-       examples/plan.example.json /tmp/plan.html
+SKILL=plugins/higgsfield-brief-to-pipeline/skills/higgsfield-brief-to-pipeline
+python "$SKILL/scripts/build_plan_html.py" "$SKILL/examples/plan.example.json" /tmp/plan.html
 ```
 
 ### Theming the preview

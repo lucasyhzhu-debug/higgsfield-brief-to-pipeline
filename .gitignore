@@ -1,6 +1,7 @@
 # Generated preview output
 *.plan.html
-examples/plan.example.html
+*.example.html
+selftest.html
 
 # Working projects — never commit renders, references, or credentials
 projects/

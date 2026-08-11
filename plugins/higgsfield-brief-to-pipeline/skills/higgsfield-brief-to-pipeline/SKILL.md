@@ -1,6 +1,11 @@
 ---
 name: higgsfield-brief-to-pipeline
-description: Use when you have a brief of desired outputs plus a folder/set of reference images and want Claude to design and run an optimal Higgsfield generation workflow — for product/spec/scene/booth/ad/character image (or video) batches where credit cost and fidelity-to-spec both matter. Triggers: "here's a brief and some references", "make these deliverables from this folder", "design the higgsfield workflow", "render this to spec cheaply".
+description: >-
+  Use when you have a brief of desired outputs plus a folder/set of reference images and want
+  Claude to design and run an optimal Higgsfield generation workflow — for
+  product/spec/scene/booth/ad/character image (or video) batches where credit cost and
+  fidelity-to-spec both matter. Triggers: "here's a brief and some references", "make these
+  deliverables from this folder", "design the higgsfield workflow", "render this to spec cheaply".
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 ---
 
@@ -36,6 +41,20 @@ Covers all three cases in order: hook/MCP context where the env var *is* set →
 (highest version wins) → manual `~/.claude/skills/` install. Every `$SK/…` reference below assumes
 it. Bash state does not persist between tool calls — re-resolve `$SK` in each call that needs it,
 or inline the block above.
+
+### Self-test (0 credits, no Higgsfield account needed)
+
+A bundled example plan lets you prove the toolchain works before designing anything. Run it if
+`$SK` resolution was at all uncertain, or if a script has failed once already:
+
+```bash
+python "$SK/scripts/build_plan_html.py" "$SK/examples/plan.example.json" /tmp/selftest.html \
+  && echo "SELFTEST OK"
+```
+
+Prints `wrote … (5 stages, est 22-30 cr)` on success. It only writes an HTML file — it never
+contacts Higgsfield and never spends credits. `$SK/examples/plan.example.json` is also the
+reference for `plan.json` shape: read it before writing your own.
 
 ## Project layout (ALWAYS start here)
 
@@ -152,7 +171,8 @@ digraph wf {
   `workflow/_prompts/` and record its template + `{PLACEHOLDERS}` + ref order in `style-spec.json`.
 
 ### 3. HTML preview (THE GATE)
-- Write the plan as `projects/<project_name>/plan.json` (schema in `$SK/scripts/build_plan_html.py`), then:
+- Write the plan as `projects/<project_name>/plan.json` (schema in `$SK/scripts/build_plan_html.py`,
+  worked example in `$SK/examples/plan.example.json`), then:
   `python "$SK/scripts/build_plan_html.py" projects/<project_name>/plan.json projects/<project_name>/plan.html`.
   Surface the absolute path (and on a desktop session, offer to open it — e.g. `start`/`open` the file).
   In a headless run, the path IS the deliverable.
@@ -177,6 +197,7 @@ digraph wf {
 | Auth/credits | `higgsfield account status` |
 | Live model IDs/costs | `higgsfield model list --json` |
 | Multi-ref render | `higgsfield generate create <model> --image A --image B --resolution 2k --aspect_ratio 4:3 --wait --prompt "…"` |
+| Self-test the toolchain (0 cr) | `python "$SK/scripts/build_plan_html.py" "$SK/examples/plan.example.json" /tmp/selftest.html` |
 | Scaffold a project | `mkdir -p projects/<name>/references projects/<name>/workflow projects/<name>/output` |
 | Build the preview gate | `python "$SK/scripts/build_plan_html.py" projects/<name>/plan.json projects/<name>/plan.html` |
 | Dimension overlay (0 cr) | `python "$SK/scripts/overlay.py" dims in.png out.png dims.json` |

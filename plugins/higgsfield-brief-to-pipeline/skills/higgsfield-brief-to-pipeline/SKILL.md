@@ -18,20 +18,24 @@ Core principle: **spend tokens (planning, verification, overlays) to save credit
 - The [Higgsfield CLI](https://higgsfield.ai) on `PATH`, authenticated via `higgsfield auth login`.
 - Python 3.9+. `build_plan_html.py` is pure stdlib; `overlay.py` needs `pillow` + `numpy`.
 
-## Locating this skill's scripts
+## Locating this skill's scripts (RUN THIS FIRST)
 
-The two helper scripts ship **inside this skill**, not in the user's project. Resolve them once at
-the start of a run and reuse the variable — never assume `scripts/` is relative to the cwd:
+The two helper scripts ship **inside this skill**, not in the user's project. `scripts/…` is never
+relative to the cwd. **`$CLAUDE_PLUGIN_ROOT` is NOT exported into the Bash tool environment** — it
+is only set for hooks and MCP servers — so resolve the directory by probing, once per run:
 
 ```bash
-# Installed as a plugin (recommended):
-SK="$CLAUDE_PLUGIN_ROOT/skills/higgsfield-brief-to-pipeline"
-# Installed manually into ~/.claude/skills/ :
-SK="$HOME/.claude/skills/higgsfield-brief-to-pipeline"
+SK="${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/skills/higgsfield-brief-to-pipeline}"
+[ -d "$SK" ] || SK=$(ls -d "$HOME"/.claude/plugins/cache/*/higgsfield-brief-to-pipeline/*/skills/higgsfield-brief-to-pipeline 2>/dev/null | sort -V | tail -1)
+[ -d "$SK" ] || SK="$HOME/.claude/skills/higgsfield-brief-to-pipeline"
+[ -f "$SK/scripts/build_plan_html.py" ] || { echo "FATAL: cannot locate skill dir (tried: $SK)"; exit 1; }
+echo "SK=$SK"
 ```
 
-If `$CLAUDE_PLUGIN_ROOT` is unset, fall back to the manual path. Every `$SK/scripts/…` reference
-below assumes this.
+Covers all three cases in order: hook/MCP context where the env var *is* set → plugin install
+(highest version wins) → manual `~/.claude/skills/` install. Every `$SK/…` reference below assumes
+it. Bash state does not persist between tool calls — re-resolve `$SK` in each call that needs it,
+or inline the block above.
 
 ## Project layout (ALWAYS start here)
 
@@ -182,6 +186,8 @@ digraph wf {
 
 ## Common mistakes
 - **Using a bare `scripts/…` path.** The scripts live in the skill, not the project. Resolve `$SK` first.
+- **Assuming `$CLAUDE_PLUGIN_ROOT` is set.** It is not exported to the Bash tool — only to hooks and
+  MCP servers. Use the probe block above; a bare `$CLAUDE_PLUGIN_ROOT/…` expands to `/skills/…` and fails.
 - **Skipping the project scaffold.** Dumping refs in top-level `inputs/` lets the next project clobber
   them. Always `projects/<name>/` first, refs in `projects/<name>/references/`.
 - **Not persisting decisions to `style-spec.json`.** Re-asking settled choices or re-measuring overlay

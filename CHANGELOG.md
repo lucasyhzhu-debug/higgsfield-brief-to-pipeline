@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.0.1 — 2026-08-11
+
+**Fix: script paths did not resolve under a real plugin install.**
+
+`SKILL.md` told Claude to build paths from `$CLAUDE_PLUGIN_ROOT`, but that variable is
+**not exported into the Bash tool environment** — it is only set for hooks and MCP
+servers. Under a plugin install the path expanded to `/skills/...` and every script
+invocation failed. Caught by a headless fresh-session smoke test after 1.0.0 shipped.
+
+Replaced with a three-branch probe that resolves the skill directory by checking, in
+order: the env var (hook/MCP context), the plugin cache (highest version wins), then a
+manual `~/.claude/skills/` install. Added a "Common mistakes" entry so the wrong pattern
+is not reintroduced, and a note that Bash state does not persist between tool calls.
+
+No changes to the pipeline protocol, prompting guidance, or either script.
+
 ## 1.0.0 — 2026-08-11
 
 Initial open-source release.
@@ -21,3 +37,5 @@ Initial open-source release.
 
 Script paths resolve via `$CLAUDE_PLUGIN_ROOT` when installed as a plugin, with a
 documented fallback for manual `~/.claude/skills/` installs.
+*(Superseded in 1.0.1 — that variable is not exported to the Bash tool, so this did not
+actually work under a plugin install.)*

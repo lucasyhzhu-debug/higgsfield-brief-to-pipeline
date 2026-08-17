@@ -22,41 +22,58 @@ plan.json schema (all fields optional except project, stages):
                    "derive don't regenerate","deterministic overlays for text+dims (0 credits)"],
   "credit_estimate":{"min":30,"max":40,"budget":860},
 
-  # --- copy + adversarial review (see references/copy-review-lenses.md) -------------------
-  # Omit BOTH blocks when a plan carries no user-facing text. Never ship "copy" without
-  # "copy_review": the page then renders a REVIEW NOT RUN banner and withholds approval.
+  # --- copy + adversarial review (gate rules: SKILL.md § The Copy Rule; how to run the
+  #     review itself: references/copy-review-lenses.md) --------------------------------
+  # Omit BOTH blocks when a plan carries no user-facing text.
   "copy":[{"id":"h1","text":"Now bulk billed.","surface":"overlay","stage":"5","status":"FIX"}],
   #   surface: overlay | depicted | caption      status: SHIP | FIX | KILL
   "copy_review":{
     "lenses":["L1 platform policy","L3 claim substantiation"],
     "refuted":11,                                    # findings killed by the refute pass
-    "findings":[{"severity":"blocker",               # blocker | high | medium | low
-                 "affects":["h1"],
+    "findings":[{"id":"f1",                          # stable handle; what `waived` refers to
+                 "severity":"blocker",               # blocker | high | medium | low
+                 "affects":["h1"],                   # copy[].id values
                  "rule":"AHPRA advertising guidelines cl 4.2",
                  "source":"https://www.ahpra.gov.au/…",   # or the token NOT-VERIFIED
                  "quote":"Now bulk billed.",         # the exact offending words
                  "why":"why the rule reaches this advertiser and this product",
                  "fix":"replacement wording"}],
+    # unverified = questions about the PLAN that no lens could source. A finding whose source is
+    # NOT-VERIFIED is a separate thing (a specific line's rule is unconfirmed); list it here too
+    # only if settling it would change whether the plan can run.
     "unverified":[{"question":"…","settled_by":"…"}],
     "disagreements":[{"issue":"…","call":"…"}],
-    "waived":[]     # rule strings the user waived in writing. EXACT string match against
-                    # findings[].rule — copy the rule verbatim, don't retype it. A near-miss
-                    # silently fails to waive and the gate stays shut, which is the safe direction.
+    "waived":["f1"]  # finding ids the user waived in writing (a rule string still works for
+                     # older plans). A near-miss fails closed — the gate stays shut.
   }
 }
 """
-import sys, json, html
+import os, sys, json, html
 
-plan = json.load(open(sys.argv[1], encoding="utf-8"))
+with open(sys.argv[1], encoding="utf-8") as _f:
+    plan = json.load(_f)
 OUT = sys.argv[2]
 e = lambda s: html.escape(str(s))
+chips = lambda xs: "".join(f"<span class='chip'>{e(x)}</span>" for x in xs or [])
 
-def rows(items, cols):
-    out = []
-    for it in items:
-        tds = "".join(f"<td>{e(it.get(c[0],'')) if not isinstance(it.get(c[0],''),list) else e(', '.join(it.get(c[0],[])))}</td>" for c in cols)
-        out.append(f"<tr>{tds}</tr>")
-    return "".join(out)
+def cell(v, render=None):
+    if isinstance(v, list):
+        v = ", ".join(str(x) for x in v)
+    return render(v) if render else e(v)
+
+def table(items, cols):
+    """cols: [(key, label)] or [(key, label, render)]. One spec drives header AND body,
+    so a column can't drift out of sync with its heading."""
+    head = "".join(f"<th>{c[1]}</th>" for c in cols)
+    body = "".join(
+        "<tr>" + "".join(f"<td>{cell(it.get(c[0], ''), c[2] if len(c) > 2 else None)}</td>"
+                         for c in cols) + "</tr>"
+        for it in items or [])
+    return f"<table><tr>{head}</tr>{body}</table>"
+
+DELIV_COLS = [("name", "Deliverable"), ("count", "Count"), ("format", "Format")]
+REF_COLS = [("file", "Reference"), ("role", "Role"), ("stages", "Stages"), ("note", "Note")]
+MODEL_COLS = [("need", "Need"), ("model", "Model"), ("credits", "Cost"), ("why", "Why")]
 
 theme = plan.get("theme", {})
 ACC = e(theme.get("accent", "#26303f"))   # headings, stage numbers, tag pill
@@ -65,14 +82,21 @@ GOLD = e(theme.get("gold", "#c98a2e"))    # card rule, chips, footer border
 ce = plan.get("credit_estimate", {})
 budget = ce.get("budget")
 cmax = ce.get("max")
+# Over budget must not render as a full healthy bar — on a page whose job is "authorise this
+# spend?", the overrun case is the one the visual has to get right.
+over_budget = bool(budget and cmax and cmax > budget)
 pct = int(min(100, (cmax / budget) * 100)) if (budget and cmax) else 0
+bar_label = (f"OVER BUDGET by {e(cmax - budget)} cr" if over_budget
+             else f"{e(cmax)} cr of {e(budget)} budget")
 
 stage_cards = ""
 for s in plan.get("stages", []):
     gate = s.get("gate", "")
     gate_html = f'<div class="gate">⛔ GATE · {e(gate)}</div>' if gate else ""
+    derives = s.get("derives_from", "")
+    derives_html = (f'&nbsp;·&nbsp; <b>Derives from:</b> {e(derives)}'
+                    if derives and derives != "-" else "")
     verify = "".join(f"<li>{e(v)}</li>" for v in s.get("verify", []))
-    refs = "".join(f"<span class='chip'>{e(r)}</span>" for r in s.get("refs", []))
     stage_cards += f"""
     <div class="card">
       <div class="card-h"><span class="sn">{e(s.get('n',''))}</span><h3>{e(s.get('name',''))}</h3>
@@ -80,99 +104,109 @@ for s in plan.get("stages", []):
       <div class="meta"><b>Model:</b> <code>{e(s.get('model',''))}</code> &nbsp;·&nbsp;
         <b>Params:</b> {e(s.get('params',''))} &nbsp;·&nbsp;
         <b>Variants:</b> {e(s.get('variants',''))}
-        {('&nbsp;·&nbsp; <b>Derives from:</b> '+e(s.get('derives_from'))) if s.get('derives_from') and s.get('derives_from')!='-' else ''}</div>
-      <div class="refs">{refs}</div>
+        {derives_html}</div>
+      <div class="refs">{chips(s.get('refs'))}</div>
       <div class="verify"><b>Auto-verify →</b><ul>{verify}</ul></div>
       {gate_html}
     </div>"""
 
 opt_html = "".join(f"<li>{e(o)}</li>" for o in plan.get("optimizations", []))
-deliv = rows(plan.get("deliverables", []), [("name","Deliverable"),("count","Count"),("format","Format")])
-refs_t = rows(plan.get("references", []), [("file","Reference"),("role","Role"),("stages","Stages"),("note","Note")])
-models_t = rows(plan.get("models", []), [("need","Need"),("model","Model"),("credits","Cost"),("why","Why")])
+deliv = table(plan.get("deliverables"), DELIV_COLS)
+refs_t = table(plan.get("references"), REF_COLS)
+models_t = table(plan.get("models"), MODEL_COLS)
 
 # ---- copy + adversarial copy review -------------------------------------------------------
-copy_lines = plan.get("copy", []) or []
-review = plan.get("copy_review")
-# A plan that carries copy but no review has NOT passed the gate. Treat that as a hard stop:
-# a missing review must never read the same as a clean one. Keyed on PRESENCE, not truthiness —
-# an explicit empty `copy_review: {}` means the review ran and found nothing, which is a pass.
-review_missing = bool(copy_lines) and "copy_review" not in plan
-findings = (review or {}).get("findings", []) or []
-waived = set((review or {}).get("waived", []) or [])
+copy_lines = plan.get("copy") or []
+# One derivation of "has this plan been reviewed", used everywhere. Keyed on PRESENCE of the key,
+# not on truthiness: an explicit `copy_review: {}` means the review ran and found nothing, which
+# is a pass. Asking the question two ways is what lets a third state (`null`) slip through.
+has_review = "copy_review" in plan and plan["copy_review"] is not None
+review = plan.get("copy_review") or {}
+findings = review.get("findings") or []
+waived = set(review.get("waived") or [])
 SEV_ORDER = {"blocker": 0, "high": 1, "medium": 2, "low": 3}
 findings = sorted(findings, key=lambda f: SEV_ORDER.get(f.get("severity", "low"), 9))
-open_blockers = [f for f in findings
-                 if f.get("severity") == "blocker" and f.get("rule") not in waived]
-hard_stop = review_missing or bool(open_blockers)
+# Waivers key on the finding's `id`, falling back to its `rule` string for older plans.
+is_waived = lambda f: f.get("id") in waived or f.get("rule") in waived
+open_blockers = [f for f in findings if f.get("severity") == "blocker" and not is_waived(f)]
 
-copy_html = ""
-if copy_lines:
-    st_cls = {"SHIP": "ok", "FIX": "warn", "KILL": "bad"}
-    body = "".join(
-        f"<tr><td><code>{e(c.get('id',''))}</code></td><td>{e(c.get('text',''))}</td>"
-        f"<td>{e(c.get('surface',''))}</td><td>{e(c.get('stage',''))}</td>"
-        f"<td><span class='pill {st_cls.get(c.get('status',''),'')}'>"
-        f"{e(c.get('status','UNREVIEWED'))}</span></td></tr>"
-        for c in copy_lines)
-    copy_html = f"""
+# Every reason a plan is not approvable lands in one list. The banner, the footer, the exit
+# status and the gate marker all derive from it, so adding a fourth gate is one append, not
+# four f-strings to reconcile.
+stops = []
+if copy_lines and not has_review:
+    stops.append({"id": "no-review",
+                  "banner": "REVIEW NOT RUN. This plan carries user-facing copy that has not "
+                            "been through the adversarial review.",
+                  "status": "BLOCKED: copy review not run"})
+elif open_blockers:
+    stops.append({"id": "blocked",
+                  "banner": f"{len(open_blockers)} unresolved copy blocker(s). No render and no "
+                            f"overlay runs until these are fixed, or waived by you in writing.",
+                  "status": f"BLOCKED: {len(open_blockers)} open copy blocker(s)"})
+hard_stop = bool(stops)
+gate_state = stops[0]["id"] if stops else "approvable"
+
+COPY_COLS = [("id", "ID", lambda v: f"<code>{e(v)}</code>"),
+             ("text", "Text"), ("surface", "Surface"), ("stage", "Stage"),
+             ("status", "Status",
+              lambda v: f"<span class='pill "
+                        f"{ {'SHIP':'ok','FIX':'warn','KILL':'bad'}.get(v, '') }'>"
+                        f"{e(v or 'UNREVIEWED')}</span>")]
+UNVER_COLS = [("question", "Question"), ("settled_by", "Settled by")]
+
+copy_html = f"""
 <h2>Copy under review ({len(copy_lines)} lines)</h2>
 <p class="lead">Every piece of user-facing text in this plan, and where it lands. Deterministic
 overlays guarantee spelling and position at 0 credits; they have no opinion on whether a line is
 publishable. That is what the review below is for.</p>
-<table><tr><th>ID</th><th>Text</th><th>Surface</th><th>Stage</th><th>Status</th></tr>{body}</table>"""
+{table(copy_lines, COPY_COLS)}""" if copy_lines else ""
 
 def _finding_card(f):
     sev = f.get("severity", "low")
-    src = str(f.get("source", "") or "")
+    src = str(f.get("source") or "")
     src_html = ('<span class="nv">NOT-VERIFIED</span>' if src.upper() == "NOT-VERIFIED"
                 else f'<a href="{e(src)}">{e(src)}</a>' if src.startswith("http")
                 else e(src))
-    affects = "".join(f"<span class='chip'>{e(a)}</span>" for a in f.get("affects", []))
+    quote = f'<blockquote>{e(f["quote"])}</blockquote>' if f.get("quote") else ""
+    why = f'<p class="why">{e(f["why"])}</p>' if f.get("why") else ""
+    fix = f'<p class="fix"><b>Replace with:</b> {e(f["fix"])}</p>' if f.get("fix") else ""
     waived_html = ('<div class="waived">WAIVED by the user for this run</div>'
-                   if f.get("rule") in waived else "")
+                   if is_waived(f) else "")
     return f"""
     <div class="find sev-{e(sev)}">
       <div class="find-h"><span class="sev">{e(sev)}</span><b>{e(f.get('rule',''))}</b></div>
-      {f'<blockquote>{e(f.get("quote"))}</blockquote>' if f.get("quote") else ""}
-      {f'<p class="why">{e(f.get("why"))}</p>' if f.get("why") else ""}
-      {f'<p class="fix"><b>Replace with:</b> {e(f.get("fix"))}</p>' if f.get("fix") else ""}
-      <div class="find-f">{affects}<span class="src">{src_html}</span></div>
+      {quote}{why}{fix}
+      <div class="find-f">{chips(f.get('affects'))}<span class="src">{src_html}</span></div>
       {waived_html}
     </div>"""
 
 review_html = ""
-if review_missing:
+if copy_lines and not has_review:
     review_html = """
-<h2>Copy review</h2>
+<h2>Adversarial copy review</h2>
 <div class="stop"><b>REVIEW NOT RUN.</b> This plan carries user-facing copy that has not been
 through the adversarial review. The gate is not passable in this state. Run step 2.5 and rebuild
 this page.</div>"""
-elif review is not None:
-    lenses = "".join(f"<span class='chip'>{e(l)}</span>" for l in review.get("lenses", []))
+elif has_review:
     refuted = review.get("refuted")
     cards = "".join(_finding_card(f) for f in findings) or \
         '<p class="lead">No findings survived the refute pass.</p>'
-    unver = "".join(
-        f"<tr><td>{e(u.get('question',''))}</td><td>{e(u.get('settled_by',''))}</td></tr>"
-        for u in review.get("unverified", []) or [])
+    unver = review.get("unverified") or []
     unver_html = f"""
 <h3>Unverified</h3>
 <p class="lead">Nobody could source these to a primary document. They are not dismissed; they are
 open questions, and some of them decide whether the copy above can run at all.</p>
-<table><tr><th>Question</th><th>Settled by</th></tr>{unver}</table>""" if unver else ""
-    disag = "".join(
-        f"<li><b>{e(d.get('issue',''))}</b> — {e(d.get('call',''))}</li>"
-        for d in review.get("disagreements", []) or [])
+{table(unver, UNVER_COLS)}""" if unver else ""
+    disag = "".join(f"<li><b>{e(d.get('issue',''))}</b> — {e(d.get('call',''))}</li>"
+                    for d in review.get("disagreements") or [])
     disag_html = f"<h3>Where the reviewers disagreed</h3><ul class='opt'>{disag}</ul>" if disag else ""
     review_html = f"""
 <h2>Adversarial copy review</h2>
-<div class="refstat">Lenses: {lenses or '<span class="chip">none recorded</span>'}
+<div class="refstat">Lenses: {chips(review.get('lenses')) or '<span class="chip">none recorded</span>'}
 {f'&nbsp;·&nbsp; <b>{e(refuted)}</b> findings killed by the refute pass' if refuted is not None else ''}
 &nbsp;·&nbsp; <b>{len(open_blockers)}</b> open blocker(s)</div>
 {cards}{unver_html}{disag_html}"""
-
-th = lambda cols: "".join(f"<th>{c[1]}</th>" for c in cols)
 HTML = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{e(plan.get('project','Workflow'))} — Process Preview</title>
@@ -197,6 +231,7 @@ tr:last-child td{{border-bottom:none}}
 .gate{{margin-top:10px;background:#fff4f4;border:1px solid #f0c9c9;color:#9b2222;font-weight:700;padding:8px 12px;border-radius:8px;font-size:13px}}
 .bar{{height:26px;background:#eee;border-radius:13px;overflow:hidden;border:1px solid var(--line)}}
 .fill{{height:100%;background:linear-gradient(90deg,var(--ok),#7bbf93);width:{pct}%;display:grid;place-items:center;color:#fff;font-size:12px;font-weight:700}}
+.fill.over{{background:linear-gradient(90deg,#c0392b,#e06055)}}
 .opt li{{margin:3px 0}}.foot{{margin-top:30px;padding:16px 18px;background:#fff;border:1px dashed var(--gold);border-radius:12px;color:var(--mut)}}
 .foot b{{color:var(--acc)}}
 h3{{font-size:15px;margin:22px 0 6px}}
@@ -217,44 +252,53 @@ h3{{font-size:15px;margin:22px 0 6px}}
 .refstat{{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--mut)}}
 .stop{{margin:12px 0;padding:14px 18px;background:#fdeaea;border:2px solid #c0392b;border-radius:12px;color:#7d1d1d;font-size:14px}}
 .stop b{{color:#c0392b}}
-</style></head><body><div class="wrap">
+</style></head><body data-gate="{gate_state}"><div class="wrap">
 <span class="tag">Higgsfield · Process Preview</span>
 <h1>{e(plan.get('project','Workflow'))}</h1>
 <p class="lead">{e(plan.get('brief_summary',''))}</p>
-{f'''<div class="stop"><b>⛔ HARD STOP — {len(open_blockers)} unresolved copy blocker(s).</b>
-No render and no overlay runs until these are fixed, or waived by you in writing. Everything else
-in this plan is reviewable now; the blockers are listed under Adversarial copy review below.</div>'''
- if open_blockers else ''}
+{"".join(f'<div class="stop"><b>⛔ HARD STOP.</b> {e(s["banner"])}</div>' for s in stops)}
 
-<h2>Deliverables</h2><table><tr>{th([('','Deliverable'),('','Count'),('','Format')])}</tr>{deliv}</table>
+<h2>Deliverables</h2>{deliv}
 {copy_html}
 {review_html}
 
 <h2>References &amp; roles</h2>
 <p class="lead">Every reference is role-labelled — the single biggest quality lever when fusing multiple images.</p>
-<table><tr>{th([('','Reference'),('','Role'),('','Stages'),('','Note')])}</tr>{refs_t}</table>
+{refs_t}
 
-<h2>Model selection</h2><table><tr>{th([('','Need'),('','Model'),('','Cost'),('','Why')])}</tr>{models_t}</table>
+<h2>Model selection</h2>{models_t}
 
 <h2>Pipeline ({len(plan.get('stages',[]))} stages)</h2>{stage_cards}
 
 <h2>Credit optimisation</h2><ul class="opt">{opt_html}</ul>
 
 <h2>Estimated spend</h2>
-<div class="bar"><div class="fill">{e(cmax)} cr of {e(budget)} budget</div></div>
+<div class="bar"><div class="fill{' over' if over_budget else ''}">{bar_label}</div></div>
 <p class="lead" style="margin-top:8px">Range {e(ce.get('min','?'))}–{e(cmax)} credits (incl. variants &amp; up to 2 retries/stage). Overlays &amp; dimensioning add <b>0 credits</b>.</p>
 
-{f'''<div class="stop"><b>Not approvable as it stands.</b> {"This plan carries copy that has not been reviewed." if review_missing else f"{len(open_blockers)} copy blocker(s) are unresolved."}
-Fix the copy and rebuild this page, or tell me explicitly which blocker you are waiving and why.
+{'''<div class="stop"><b>Not approvable as it stands.</b> The open item is stated at the top of
+this page. Fix it and rebuild, or tell me explicitly which blocker you are waiving and why.
 Nothing renders and no overlay is composited until then.</div>'''
  if hard_stop else
  '''<div class="foot"><b>This is a preview, not a commitment.</b> No credits are spent until you approve.
 Reply with changes (swap a model, fewer variants, tighter scope) or <b>approve</b> to run the pipeline stage-by-stage with auto-verification and the human gate(s) above.</div>'''}
 </div></body></html>"""
-open(OUT, "w", encoding="utf-8").write(HTML)
-_status = ("BLOCKED: copy review not run" if review_missing
-           else f"BLOCKED: {len(open_blockers)} open copy blocker(s)" if open_blockers
-           else f"copy OK ({len(copy_lines)} lines)" if copy_lines
-           else "no copy")
-print(f"wrote {OUT} ({len(plan.get('stages',[]))} stages, est {ce.get('min','?')}-{cmax} cr, {_status})")
+# A shut gate must not leave an approvable artifact on disk. An exit code lives for one tool
+# call; a stale clean plan.html from an earlier build sits at the exact path the skill tells the
+# agent to open. So write the blocked page beside it under a name nobody will mistake for the
+# gate, and remove any previous pass. The state is then visible from `ls`, not just from a value
+# that evaporates across a compaction or a second agent picking up the project.
+if hard_stop:
+    root, ext = os.path.splitext(OUT)
+    OUT, stale = root + ".BLOCKED" + ext, OUT
+    if os.path.exists(stale):
+        os.remove(stale)
+with open(OUT, "w", encoding="utf-8") as _f:
+    _f.write(HTML)
+
+status = (stops[0]["status"] if stops
+          else f"copy OK ({len(copy_lines)} lines)" if copy_lines
+          else "no copy")
+print(f"wrote {OUT} ({len(plan.get('stages',[]))} stages, "
+      f"est {ce.get('min','?')}-{cmax} cr, {status})")
 sys.exit(2 if hard_stop else 0)

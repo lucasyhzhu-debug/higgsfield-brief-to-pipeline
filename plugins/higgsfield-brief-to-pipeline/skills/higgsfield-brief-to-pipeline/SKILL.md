@@ -17,11 +17,7 @@ shown to the user as an **HTML process preview FIRST**, then executed stage-by-s
 auto-verification, human gates, and zero-credit deterministic overlays for text/dimensions.
 
 Core principle: **spend tokens (planning, verification, overlays) to save credits (renders).**
-
-The same principle is why **copy is adversarially reviewed before the render, never after**
-(step 2.5). A line that breaches a platform policy or an advertising rule is exactly as unusable
-when it is perfectly kerned, and finding that out after a 5-variant anchor stage costs the credits,
-the tokens and the wall-clock instead of just the tokens.
+For the same reason, copy is adversarially reviewed **before** the render, at step 2.5.
 
 ## Prerequisites
 
@@ -57,13 +53,9 @@ python "$SK/scripts/build_plan_html.py" "$SK/examples/plan.example.json" /tmp/se
   && echo "SELFTEST OK"
 ```
 
-Prints `wrote … (5 stages, est 22-30 cr, copy OK (4 lines))` and exits 0. It only writes an HTML
-file — it never contacts Higgsfield and never spends credits. `$SK/examples/plan.example.json` is
-also the reference for `plan.json` shape, including the `copy` and `copy_review` blocks: read it
-before writing your own.
-
-Regression tests for the copy gate live in `tests/test_build_plan_html.py` at the repo root
-(`python tests/test_build_plan_html.py`, stdlib only). Run them after touching the builder.
+Prints a `wrote …` summary line and exits 0. It only writes an HTML file — it never contacts
+Higgsfield and never spends credits. `$SK/examples/plan.example.json` is also the reference for
+`plan.json` shape, including the `copy` and `copy_review` blocks: read it before writing your own.
 
 ## Project layout (ALWAYS start here)
 
@@ -102,12 +94,10 @@ anything — they substitute placeholders into saved templates and rerun. Treat 
   makes the 0-credit text layer repeatable across a whole set without re-measuring.
 - Suggested top-level keys: `brand`, `concept`, `palette`, `card_format`, `anatomy_normalized`,
   `art_style`, `naming_conventions`, `shiny_rules`(domain-specific), `models`, `reference_roles`,
-  `prompt_templates`, `overlays`, `verification`, `copy_review`, `locked_decisions`, `open_items`.
-- **`copy_review` holds the review's standing state**: `applies` (does this project produce copy at
-  all), `lenses` (locked on first run so later batches don't re-decide), `cleared_wording` (lines the
-  client has already signed off, reusable verbatim), `standing_lines` (disclaimers or caption text
-  that must appear on every deliverable), and `open_items` for anything still `NOT-VERIFIED`. This is
-  what stops a 26-card set from paying for 26 reviews of the same locked template.
+  `prompt_templates`, `overlays`, `verification`, `copy_policy`, `locked_decisions`, `open_items`.
+- **`copy_policy` is the review's standing config** — deliberately NOT called `copy_review`, which
+  is the per-run *result* block in `plan.json`. Keys and how they cut review cost across a set:
+  `$SK/references/copy-review-lenses.md`.
 
 ## The Iron Rule
 
@@ -136,10 +126,7 @@ This binds the same way the Iron Rule does, and it binds the 0-credit overlay la
 | "I'll review it after we see how it renders" | The render is the expensive half. Review is the cheap half. Doing the expensive half first inverts the entire skill. |
 | "The reviewers found nothing last batch" | Record that (`copy_review: {}`) and move on. A recorded clean pass and a skipped review must never look the same in `plan.html`. |
 
-`build_plan_html.py` enforces this: a plan carrying `copy` with no `copy_review` key renders a
-**REVIEW NOT RUN** banner, withholds the approve footer, and **exits 2**. Any surviving
-`blocker`-severity finding does the same. Do not work around a non-zero exit by hand-editing the
-HTML; fix the copy and rebuild.
+`build_plan_html.py` enforces this rather than trusting the table above — see step 3.
 
 ## Workflow
 
@@ -163,13 +150,16 @@ digraph wf {
   "Done: log scores.md" [shape=doublecircle];
 
   "Name project + scaffold projects/<name>/" -> "User saves refs in projects/<name>/references/" -> "Brief + references";
-  "Brief + references" -> "Ingest + role-label refs" -> "Design pipeline (models, stages, verify, credits)" -> "Plan contains copy?";
+  "Brief + references" -> "Ingest + role-label refs";
+  "Ingest + role-label refs" -> "Design pipeline (models, stages, verify, credits)";
+  "Ingest + role-label refs" -> "Plan contains copy?" [label="fork: needs nothing from design"];
   "Plan contains copy?" -> "Adversarial copy review (lenses -> refute)" [label="yes"];
   "Plan contains copy?" -> "Build HTML preview + open it" [label="no"];
   "Adversarial copy review (lenses -> refute)" -> "Blockers survived?";
-  "Blockers survived?" -> "Fix copy" [label="yes"];
+  "Blockers survived?" -> "Fix copy" [label="yes (<=2 rounds)"];
   "Fix copy" -> "Adversarial copy review (lenses -> refute)";
   "Blockers survived?" -> "Build HTML preview + open it" [label="no / waived in writing"];
+  "Design pipeline (models, stages, verify, credits)" -> "Build HTML preview + open it" [label="join"];
   "Build HTML preview + open it" -> "User approves?";
   "User approves?" -> "Design pipeline (models, stages, verify, credits)" [label="revise"];
   "User approves?" -> "Execute stage" [label="approve"];
@@ -218,42 +208,30 @@ digraph wf {
 
 ### 2.5 Adversarial copy review (whenever the plan carries text)
 
-Read `$SK/references/copy-review-lenses.md` before running this. It carries the lens catalogue, the
-depth rules, the refute-pass failure modes, and what a finding must contain.
+**`$SK/references/copy-review-lenses.md` is the authority** for which lenses to run, at what depth,
+when to escalate, what a finding must carry, and what is out of scope. Read it and follow it — the
+rules are not restated here, so this section and the reference can never disagree. This step can
+start as soon as step 1 has the copy; it needs nothing from step 2, so run it alongside the design
+work and join before step 3.
 
-- **Collect every line into `plan.json → copy`**, one entry per line, with `id`, `text`, `surface`
-  (`overlay` | `depicted` | `caption`) and the `stage` it lands in. Three surfaces qualify: overlay
-  text from `overlay.py`, text a prompt asks a model to depict (signage, packaging, labels, prices),
-  and campaign copy carried in the brief. If a project has none, omit both blocks and skip to step 3.
-- **Pick lenses, don't run them all.** `style-spec.json → copy_review.lenses` wins if already
-  locked. Otherwise select per the reference: L1 platform policy + L4 brand/legal as the floor, add
-  L3 when the copy carries a number, comparison, superlative or exclusivity claim, add L2 and go to
-  full depth for regulated subjects (health, financial, therapeutic, alcohol, gambling, children's).
-  An irrelevant lens is not free — it produces confident findings about a rule that does not reach
-  this advertiser, which teaches the user to ignore the whole report.
-- **Fan out one subagent per lens, in a single message so they run concurrently.** Each gets the copy
-  block, the brief, the destination channel, and an instruction to **cite live primary sources**, not
-  recollection. Platform policies and regulator guidance both move, and a confidently quoted stale
-  clause is the most expensive kind of wrong here.
-- **Then refute.** One independent skeptic per lens, told to default to rejecting a finding unless it
-  can locate the actual rule text. This pass is mandatory and is the highest-value step in the whole
-  review — the failure modes to hand it are listed in the reference. Do not merge a reviewer's own
-  severity into the plan; only what survives refutation counts.
-- **Write the survivors to `plan.json → copy_review`** (`lenses`, `refuted`, `findings`,
-  `unverified`, `disagreements`, `waived`). Group blockers **by cause, not by line**. Keep
-  disagreements between lenses visible rather than smoothing them over; a suppressed disagreement is
-  the finding most likely to have been resolved wrongly. Set each `copy` line's `status` to
-  `SHIP` / `FIX` / `KILL`.
-- **Fix, then re-run the affected lens.** Blockers loop; they do not get carried into the preview
-  with a note. Escalate lenses if a reviewer surfaces a regulated claim the plan did not declare;
-  never de-escalate mid-run.
-- **Lock the outcome into `style-spec.json`** (`copy_review.lenses`, `copy_review.applies`, standing
-  caption/disclaimer lines, and any wording the client has already cleared) so the next batch in the
-  set inherits it instead of relitigating.
-
-Findings about the *destination* (a landing page that contradicts itself, a price shown two ways, a
-purchase path that contradicts the stated process) are out of scope for the render but not
-worthless. Hand them back to the user in the summary.
+- **Collect every line into `plan.json → copy`** — `id`, `text`, `surface` (`overlay` | `depicted` |
+  `caption`), `stage`. No copy? Omit both blocks and go to step 3.
+- **Demote before you review.** For every `depicted` line, ask whether `overlay.py` can composite it
+  instead. A depicted line costs credits and re-rolls for misspellings; an overlay line costs 0 and
+  cannot misspell. This is the only moment where every line, its wording and its placement are all
+  in hand, so it is the moment the demotion is decidable.
+- **Reuse before you spend.** Check `style-spec.json → copy_policy`: a line matching a
+  `cleared_templates` entry with every substitution inside the declared placeholder domain inherits
+  its status with no subagent. Only new or out-of-domain wording gets reviewed.
+- **Fan out one subagent per lens, in a single message so they run concurrently.** Give each the copy
+  block, the brief, the destination channel, and an instruction to cite live primary sources.
+- **Refute, also in a single message.** Dispatch each lens's skeptic as soon as that lens returns.
+  Only what survives refutation goes in the plan; a reviewer's own severity is a proposal.
+- **Write survivors to `plan.json → copy_review`** and set each `copy` line's `status`. Shape and
+  field meanings: the schema block at the top of `$SK/scripts/build_plan_html.py`.
+- **Fix and re-review, capped at 2 rounds.** Anything still open after round 2 goes to
+  `copy_review.unverified` with what would settle it, and the user decides at the gate.
+- **Lock the outcome into `style-spec.json → copy_policy`** so the rest of the set inherits it.
 
 ### 3. HTML preview (THE GATE)
 - Write the plan as `projects/<project_name>/plan.json` (schema in `$SK/scripts/build_plan_html.py`,
@@ -261,9 +239,10 @@ worthless. Hand them back to the user in the summary.
   `python "$SK/scripts/build_plan_html.py" projects/<project_name>/plan.json projects/<project_name>/plan.html`.
   Surface the absolute path (and on a desktop session, offer to open it — e.g. `start`/`open` the file).
   In a headless run, the path IS the deliverable.
-- **Check the exit code.** `0` = approvable. `2` = the copy gate is closed (review not run, or a
-  blocker survived). On a `2`, do not present the page as ready: say which blocker is open, fix it,
-  and rebuild. The page states this itself, but the exit code is what stops an automated run.
+- **Check the exit code.** `0` = approvable, written to `plan.html`. `2` = the copy gate is closed
+  (review not run, or a blocker survived): the page is written to `plan.BLOCKED.html` instead and
+  any stale `plan.html` is deleted, so an approvable artifact cannot exist while the gate is shut.
+  On a `2`, say which item is open, fix it, and rebuild. Never hand-edit the HTML to get past this.
 - Stop. Wait for approval or revisions. Loop back to step 2 on changes, or step 2.5 on copy changes.
 
 ### 4. Execute
@@ -303,16 +282,9 @@ worthless. Hand them back to the user in the summary.
 - **Not persisting decisions to `style-spec.json`.** Re-asking settled choices or re-measuring overlay
   coords on every run. Read it on start, write to it on every lock — it's how a set scales cheaply.
 - **Rendering before the HTML gate.** The #1 violation. Always preview, always wait.
-- **Treating the 0-credit overlay layer as exempt from copy review.** It is the surface where the
-  final user-facing text actually lands. Free to composite, not free to get wrong.
-- **Skipping the refute pass** and pasting a reviewer's raw findings into the plan. Unrefuted lists
-  routinely cite a regime that does not reach the advertiser, or a clause number from a superseded
-  edition of a guideline. One bad citation and the user discounts the whole report.
-- **Running every lens on every plan.** A sneaker product shot does not need a health-advertising
-  review. Irrelevant lenses generate confident noise; pick per `copy-review-lenses.md`.
-- **Dropping `NOT-VERIFIED` findings** because they lack a source. They belong under Unverified with
-  what would settle them — some of the most decision-relevant items can only be confirmed inside the
-  client's own account or contract.
+- **Copy shortcuts.** The 0-credit overlay layer is in scope, the refute pass is not optional,
+  irrelevant lenses are worse than none, and `NOT-VERIFIED` is not a reason to drop a finding —
+  see `$SK/references/copy-review-lenses.md`.
 - **Un-roled references** dumped into one prompt → muddy fusion. Label every image.
 - **Re-generating a design downstream** instead of feeding the approved anchor as identity → drift + wasted credits.
 - **Letting the image model type dimensions/menus/labels.** Misspells, costs credits. Use `overlay.py`.

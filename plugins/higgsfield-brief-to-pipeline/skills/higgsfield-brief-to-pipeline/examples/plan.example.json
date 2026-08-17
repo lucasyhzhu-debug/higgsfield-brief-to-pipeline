@@ -110,6 +110,7 @@
     "refuted": 4,
     "findings": [
       {
+        "id": "f1",
         "severity": "high",
         "affects": ["fascia-1"],
         "rule": "Australian Consumer Law s18 and s29(1)(g) — misleading representations about the standard or quality of goods",
@@ -119,6 +120,7 @@
         "fix": "Roasted weekly in [suburb]. Specific, verifiable, and stronger as copy."
       },
       {
+        "id": "f2",
         "severity": "medium",
         "affects": ["fascia-2"],
         "rule": "ACL s18 — conduct likely to mislead, read with the centre's tenancy lease",
@@ -128,6 +130,7 @@
         "fix": "Confirm permitted trading hours against the lease before this is rendered. Omit from the submission if unresolved."
       },
       {
+        "id": "f3",
         "severity": "low",
         "affects": ["callout-1"],
         "rule": "Internal drawing standard — dimensions carry units",

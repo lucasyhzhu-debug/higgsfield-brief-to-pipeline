@@ -24,14 +24,20 @@ annos.json  : {"title":"ADDITIONS vs original","banner":"#26303f",
 `banner` is any CSS hex and defaults to a neutral slate. Callout `x`/`y` are fractions of
 image width/height, so coordinates stay valid when you re-render at another resolution.
 """
-import sys, json
+import sys, json, math, functools
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageColor, ImageDraw, ImageFont
 
-MODE, INP, OUT, CFG = sys.argv[1], sys.argv[2], sys.argv[3], json.load(open(sys.argv[4], encoding="utf-8"))
+MODE = sys.argv[1]
+if MODE not in ("dims", "annotate"):   # check before the 4k decode below, not after
+    sys.exit(f"usage: overlay.py dims|annotate <in.png> <out.png> <config.json> (got {MODE!r})")
+INP, OUT = sys.argv[2], sys.argv[3]
+with open(sys.argv[4], encoding="utf-8") as _f:
+    CFG = json.load(_f)
 im = Image.open(INP).convert("RGB"); W, H = im.size
 draw = ImageDraw.Draw(im); INK = (40, 40, 46)
 
+@functools.lru_cache(maxsize=16)
 def font(sz, bold=True):
     for p in ([f"C:/Windows/Fonts/{'arialbd' if bold else 'arial'}.ttf",
                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
@@ -46,17 +52,22 @@ def label(cx, cy, txt, F):
     draw.text((cx-tw/2, cy-thh/2-tb[1]), txt, fill=INK, font=F)
 
 def arrow(p, q):
-    import math
     draw.line([p, q], fill=INK, width=4); a = math.atan2(q[1]-p[1], q[0]-p[0])
     for s in (-0.5, 0.5):
         draw.line([q, (q[0]-26*math.cos(a+s), q[1]-26*math.sin(a+s))], fill=INK, width=4)
 
 def silhouette():
-    a = np.asarray(im).astype(int)
+    # int16 holds 0-255 exactly, so this is the same numbers in a quarter of the memory:
+    # ~50 MB rather than ~199 MB for the source array on a 4k render. And comparing squared
+    # distance against a squared threshold is monotonic, so it drops ~8M square roots without
+    # changing which pixels pass. `bg` stays a float median, so the arithmetic below is
+    # unchanged from the sqrt version rather than merely close to it.
+    a = np.asarray(im).astype(np.int16)
     corners = np.concatenate([a[:40,:40].reshape(-1,3), a[:40,-40:].reshape(-1,3),
                               a[-40:,:40].reshape(-1,3), a[-40:,-40:].reshape(-1,3)])
     bg = np.median(corners, axis=0)
-    mask = np.sqrt(((a-bg)**2).sum(axis=2)) > CFG.get("bg_thresh", 38)
+    thresh = CFG.get("bg_thresh", 38)
+    mask = ((a-bg)**2).sum(axis=2) > thresh**2
     xs = np.where(mask.sum(axis=0) > H*0.02)[0]; ys = np.where(mask.sum(axis=1) > W*0.02)[0]
     return mask, int(xs.min()), int(xs.max()), int(ys.min()), int(ys.max())
 
@@ -100,7 +111,6 @@ elif MODE == "annotate":
     title = CFG.get("title")
     if title:
         tb = draw.textbbox((0,0), title, font=TITLE)
-        from PIL import ImageColor
         bc = ImageColor.getrgb(CFG.get("banner", "#26303f"))
         draw.rectangle([0,0,W,tb[3]-tb[1]+34], fill=bc); draw.text((30,16), title, fill=(244,244,247), font=TITLE)
     for c in CFG.get("callouts", []):
@@ -113,8 +123,7 @@ elif MODE == "annotate":
         for i, ln in enumerate(lines): draw.text((bx+pad, by+pad+i*lh), ln, fill=INK, font=F)
         sx = bx+tw+2*pad if c.get("side","L")=="L" else bx; sy = by+(bh+2*pad)//2
         draw.line([(sx,sy),(ax,ay)], fill=INK, width=3)
-        from PIL import ImageColor as _IC
-        draw.ellipse([ax-9,ay-9,ax+9,ay+9], fill=_IC.getrgb(CFG.get("accent", "#c98a2e")), outline=INK, width=3)
+        draw.ellipse([ax-9,ay-9,ax+9,ay+9], fill=ImageColor.getrgb(CFG.get("accent", "#c98a2e")), outline=INK, width=3)
 else:
     sys.exit("mode must be 'dims' or 'annotate'")
 

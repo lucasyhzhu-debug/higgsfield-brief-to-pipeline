@@ -26,7 +26,7 @@ Three surfaces, all in scope, in descending order of risk:
 
 **Declare it, never infer it.** The plan carries a `copy` block listing every line and where it
 lands. If the block is missing, ask once: *"does this plan contain any user-facing text?"* and
-record the answer in `style-spec.json → copy_review.applies`. A gate that decides for itself
+record the answer in `style-spec.json → copy_policy.applies`. A gate that decides for itself
 whether it applies is a gate that gets skipped.
 
 ## The lens catalogue
@@ -88,12 +88,52 @@ professional body, or clinical guideline
   → all four, one refuter per lens.                    (~4 lenses + 4 refute)
 ```
 
-Lock the chosen lenses into `style-spec.json → copy_review.lenses` on the first run of a project.
-Later batches inherit them and only re-run when the copy changes. A project does not re-decide this
-per creative any more than it re-decides its palette.
+This ladder sets the refuter count too, and it is the only place that does: **one refuter on the
+2-lens path, one per lens at full depth.** SKILL.md defers here on purpose so the number that bounds
+the cost has a single authority.
 
 **Escalate, never de-escalate mid-run.** If a reviewer surfaces a regulated claim the plan did not
-declare, add the lens and rerun rather than reasoning around it.
+declare, add the lens and rerun rather than reasoning around it. Cap the fix-and-re-review loop at
+**2 rounds**; anything still open goes to `copy_review.unverified` and the user decides at the gate.
+Escalation widens the fan-out, so an uncapped loop is the one place this gate can cost more than the
+renders it protects.
+
+## `style-spec.json → copy_policy` — reviewing a set without paying per item
+
+Locking *which* lenses to run is not the same as locking *whether to run them*, and only the second
+one scales. A 26-card set built by substituting `{LETTER}`/`{ANIMAL}` into a locked template has 26
+different copy strings, so a naive "re-run when the copy changes" rule mandates 26 full fan-outs to
+protect maybe 50 credits of renders. That is a failed gate.
+
+Review the **template**, once, with its placeholder domain written down:
+
+```jsonc
+"copy_policy": {
+  "applies": true,
+  "lenses": ["L1 platform policy", "L4 brand and legal"],
+  "cleared_templates": [
+    { "template": "{LETTER} is for {ANIMAL}",
+      "placeholders": { "LETTER": "A-Z", "ANIMAL": "common animal noun, no brand names" },
+      "cleared_on": "2026-08-17", "status": "SHIP" }
+  ],
+  "cleared_wording": ["Bulk billed for eligible patients."],
+  "standing_lines": ["Screening test. Talk to your doctor."],
+  "open_items": []
+}
+```
+
+A line that matches a cleared template with **every substitution inside the declared domain**
+inherits its status with no subagent. Anything else — a new brand name, a number, a superlative
+entering through a placeholder — is out of domain and gets a real review. 26 reviews become 1 plus
+the exceptions.
+
+Two constraints on that. `cleared_wording` is verbatim-match only, so it never covers a substituted
+line; that is what `cleared_templates` is for. And a cleared template does not survive a change of
+destination channel or jurisdiction, because L1 and L2 were decided against the old one.
+
+It is called `copy_policy` and not `copy_review` because `plan.json → copy_review` is this run's
+findings. Same neighbourhood, incompatible shapes; an agent that has read one will otherwise write
+the other's keys.
 
 ## The refute pass is mandatory
 

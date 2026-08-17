@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.1.1 — 2026-08-17
+
+**Cleanup pass over the whole skill.** No behaviour change to the pipeline itself.
+
+- `SKILL.md` is ~30 lines lighter and no longer restates `copy-review-lenses.md`. It loads on every
+  invocation, so a rule stated in both places was paid for twice and could drift; the reference is
+  now the sole authority on lenses, depth, refuter count and escalation.
+- Fixed: `SKILL.md` told the agent to run `tests/…`, which never ships inside the plugin. That
+  instruction failed for every skill user.
+- Fixed: `"copy_review": null` fell between the presence check and the render check, rendering
+  neither the REVIEW NOT RUN banner nor the review, and exiting 0. One derivation now, and the page
+  declares its state in `<body data-gate>`.
+- Fixed: two tests asserted nothing. `sev-blocker` and `11` both occur in the unconditional
+  stylesheet, so they passed on an empty plan. Tests now assert against the rendered body only.
+- Waivers key on a finding `id` instead of transcribing a 90-character rule string.
+- Over-budget plans no longer render as a full green bar; the overrun is the case that visual has
+  to get right.
+- One `table()` helper replaces four table idioms and a column spec that was declared twice.
+- `overlay.py`: dropped ~8M square roots per `dims` run (comparing squared distance to a squared
+  threshold is monotonic), quartered the source array with `int16`, cached font loading, hoisted
+  imports out of loops, and moved argument validation ahead of the image decode.
+
 ## 1.1.0 — 2026-08-17
 
 **New: copy is adversarially reviewed before it is rendered, not after.**
@@ -26,12 +48,17 @@ overlay layer is exactly where the final user-facing text lands.
   **exits 2** when the gate is closed. A plan carrying `copy` with no `copy_review` key renders
   REVIEW NOT RUN and withholds the approve footer: a skipped review must never read like a clean
   one. Surviving `blocker` findings hard-stop; `high` and below are advisory.
+- A blocked build writes `plan.BLOCKED.html` and deletes any stale `plan.html`, so an approvable
+  artifact cannot sit on disk while the gate is shut. An exit code lives for one tool call; a file
+  on disk survives a compaction, a resumed session, or a second agent picking up the project.
 - `allowed-tools` gains `Agent`, `WebSearch` and `WebFetch`. The review is close to worthless
   without live sources, since platform policies and regulator guidance both move and a confidently
   quoted stale clause is the most expensive kind of wrong.
-- New `tests/test_build_plan_html.py` (stdlib, 15 tests) covering the four gate states.
-- `style-spec.json` gains a `copy_review` block so a set locks its lenses and cleared wording once
-  instead of re-reviewing an unchanged template per variant.
+- New `tests/test_build_plan_html.py` (stdlib) covering every gate state. Repo-only; it is not part
+  of the plugin payload.
+- `style-spec.json` gains a `copy_policy` block — named apart from `plan.json`'s per-run
+  `copy_review` on purpose — carrying `cleared_templates`, which is what stops a 26-item set paying
+  for 26 reviews of one locked template.
 
 ## 1.0.2 — 2026-08-11
 

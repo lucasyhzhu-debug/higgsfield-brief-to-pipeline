@@ -129,7 +129,8 @@ plugins/higgsfield-brief-to-pipeline/skills/higgsfield-brief-to-pipeline/
     plan.example.json               a complete 5-stage plan; also the plan.json shape reference
 
 tests/
-  test_build_plan_html.py           15 stdlib tests over the four copy-gate states
+  test_build_plan_html.py           stdlib tests over the copy-gate states (repo only, not shipped
+                                    with the plugin — run from a clone: `python tests/…`)
 ```
 
 The example ships **inside the skill**, so the toolchain is self-testable from any install without

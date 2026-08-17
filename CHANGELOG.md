@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.1.0 — 2026-08-17
+
+**New: copy is adversarially reviewed before it is rendered, not after.**
+
+Any plan carrying user-facing text now passes through a review at step 2.5, before `plan.html` is
+built and therefore before a credit is spent. Multiple reviewer lenses run concurrently, then an
+independent skeptic attacks each finding and defaults to rejecting it unless it can locate the
+actual rule text. Only what survives that second pass reaches the plan.
+
+The refute pass is the point. In the review that motivated this, 43 raw findings went in; the
+skeptics killed an entire regulatory framework that four of them rested on, and corrected clause
+numbers quoted from a superseded edition of a guideline. An unrefuted list cites rules that do not
+reach the advertiser, and one bad citation gets the whole report discounted.
+
+This also closes a gap the skill had by construction. Deterministic overlays were treated as the
+safe layer because they cost nothing and cannot misspell. Free is not the same as compliant, and the
+overlay layer is exactly where the final user-facing text lands.
+
+- New `references/copy-review-lenses.md`: four lenses, when each applies, depth and escalation
+  rules, the refute-pass failure modes, and what a finding must carry to count.
+- `plan.json` gains `copy` (every line, its surface, its stage, its status) and `copy_review`
+  (lenses, findings, unverified items, disagreements, waivers).
+- `build_plan_html.py` renders both, sorts findings blockers-first, links or flags each source, and
+  **exits 2** when the gate is closed. A plan carrying `copy` with no `copy_review` key renders
+  REVIEW NOT RUN and withholds the approve footer: a skipped review must never read like a clean
+  one. Surviving `blocker` findings hard-stop; `high` and below are advisory.
+- `allowed-tools` gains `Agent`, `WebSearch` and `WebFetch`. The review is close to worthless
+  without live sources, since platform policies and regulator guidance both move and a confidently
+  quoted stale clause is the most expensive kind of wrong.
+- New `tests/test_build_plan_html.py` (stdlib, 15 tests) covering the four gate states.
+- `style-spec.json` gains a `copy_review` block so a set locks its lenses and cleared wording once
+  instead of re-reviewing an unchanged template per variant.
+
 ## 1.0.2 — 2026-08-11
 
 **Fix: YAML frontmatter did not parse — all skill metadata was silently dropped.**

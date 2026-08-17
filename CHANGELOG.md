@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.1.2 — 2026-08-17
+
+**`overlay.py` is now actually tested, and one proposed optimisation was measured and declined.**
+
+1.1.1 shipped the `dims`/`annotate` changes reasoned but unexecuted, because the machine they were
+written on had no numpy. With numpy present:
+
+- The `silhouette()` change produces a **bit-identical mask** to the original across 300 randomised
+  images at every threshold, and on a 4k render it runs in 239 ms against 346 ms with 448 MB peak
+  against 597 MB. Real win, no behaviour change.
+- Both modes were run end to end on a stepped-counter fixture and the output inspected. Dimension
+  auto-assignment correctly gave the taller value to the taller side.
+- **The `counter_top` vectorisation was verified correct and then declined.** It matches the loop
+  across 4,000 randomised masks including empty spans, but on a 650-column span of a 4k mask it
+  saves about **1 ms**. The "1,300 numpy round-trips" reasoning was right about the mechanism and
+  wrong about the magnitude, and a rewrite that trades a readable loop for 1 ms is a bad trade. The
+  loop stays, with the measurement recorded next to it so nobody re-litigates it.
+- Removed a now-unreachable `else` branch: argument validation moved to the top of the file in
+  1.1.1, so the trailing mode check was dead.
+
 ## 1.1.1 — 2026-08-17
 
 **Cleanup pass over the whole skill.** No behaviour change to the pipeline itself.

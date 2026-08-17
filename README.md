@@ -37,6 +37,9 @@ Ingest brief; open every reference; assign each a ROLE
 Design pipeline — models, params, ordered refs, variant counts,
    explicit auto-verify criteria, credit estimate, human gates
         ↓
+Carries copy? → adversarial review: lenses in parallel, then a
+   skeptic that must find the rule text or drop the finding
+        ↓  (surviving blockers loop back and get fixed)
 ┌──────────────────────────────────────────────┐
 │  BUILD plan.html  ←── THE GATE. Stop. Wait.  │   ← no credits spent yet
 └──────────────────────────────────────────────┘
@@ -50,7 +53,7 @@ Deterministic overlays for text/dimensions (0 credits)
 scores.md — every verdict logged
 ```
 
-### The five ideas worth stealing
+### The six ideas worth stealing
 
 1. **The HTML gate is non-negotiable.** No credit-spending render runs before you approve a rendered
    preview showing stages, models, references, verify criteria, and a credit estimate against your
@@ -65,6 +68,12 @@ scores.md — every verdict logged
 5. **`style-spec.json` turns a batch into a system.** Locked decisions, prompt templates with
    `{PLACEHOLDERS}`, and overlay coordinates persist, so producing the *next* 25 variants is
    substitution — not re-deciding.
+6. **Review the copy before you pay to render it, and make the reviewers argue.** Reviewer agents
+   run per lens, then an independent skeptic attacks every finding and drops it unless it can quote
+   the actual rule. Unrefuted compliance review is worse than none: it cites regimes that don't
+   reach the advertiser and clause numbers from superseded editions, and one bad citation gets the
+   whole report ignored. The gate also covers the 0-credit overlay layer, because free to composite
+   and safe to publish are different properties.
 
 ## Install
 
@@ -112,11 +121,16 @@ plugins/higgsfield-brief-to-pipeline/skills/higgsfield-brief-to-pipeline/
     higgsfield-models.md            model → use map, credit-optimisation rules, CLI patterns
     prompting-principles.md         multi-reference prompting levers + reusable templates,
                                     distilled from Google / OpenAI / BFL official guidance
+    copy-review-lenses.md           which reviewers to run on copy, how deep, and the refute pass
   scripts/
     build_plan_html.py              plan.json → the approval gate (stdlib only, themeable)
     overlay.py                      dims | annotate — 0-credit text & dimension compositing
   examples/
     plan.example.json               a complete 5-stage plan; also the plan.json shape reference
+
+tests/
+  test_build_plan_html.py           stdlib tests over the copy-gate states (repo only, not shipped
+                                    with the plugin — run from a clone: `python tests/…`)
 ```
 
 The example ships **inside the skill**, so the toolchain is self-testable from any install without

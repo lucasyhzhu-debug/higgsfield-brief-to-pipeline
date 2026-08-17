@@ -6,7 +6,7 @@ description: >-
   product/spec/scene/booth/ad/character image (or video) batches where credit cost and
   fidelity-to-spec both matter. Triggers: "here's a brief and some references", "make these
   deliverables from this folder", "design the higgsfield workflow", "render this to spec cheaply".
-allowed-tools: Bash, Read, Write, Edit, Glob, Grep
+allowed-tools: Bash, Read, Write, Edit, Glob, Grep, Agent, WebSearch, WebFetch
 ---
 
 # Higgsfield Brief → Pipeline
@@ -17,6 +17,7 @@ shown to the user as an **HTML process preview FIRST**, then executed stage-by-s
 auto-verification, human gates, and zero-credit deterministic overlays for text/dimensions.
 
 Core principle: **spend tokens (planning, verification, overlays) to save credits (renders).**
+For the same reason, copy is adversarially reviewed **before** the render, at step 2.5.
 
 ## Prerequisites
 
@@ -52,9 +53,9 @@ python "$SK/scripts/build_plan_html.py" "$SK/examples/plan.example.json" /tmp/se
   && echo "SELFTEST OK"
 ```
 
-Prints `wrote … (5 stages, est 22-30 cr)` on success. It only writes an HTML file — it never
-contacts Higgsfield and never spends credits. `$SK/examples/plan.example.json` is also the
-reference for `plan.json` shape: read it before writing your own.
+Prints a `wrote …` summary line and exits 0. It only writes an HTML file — it never contacts
+Higgsfield and never spends credits. `$SK/examples/plan.example.json` is also the reference for
+`plan.json` shape, including the `copy` and `copy_review` blocks: read it before writing your own.
 
 ## Project layout (ALWAYS start here)
 
@@ -93,7 +94,10 @@ anything — they substitute placeholders into saved templates and rerun. Treat 
   makes the 0-credit text layer repeatable across a whole set without re-measuring.
 - Suggested top-level keys: `brand`, `concept`, `palette`, `card_format`, `anatomy_normalized`,
   `art_style`, `naming_conventions`, `shiny_rules`(domain-specific), `models`, `reference_roles`,
-  `prompt_templates`, `overlays`, `verification`, `locked_decisions`, `open_items`.
+  `prompt_templates`, `overlays`, `verification`, `copy_policy`, `locked_decisions`, `open_items`.
+- **`copy_policy` is the review's standing config** — deliberately NOT called `copy_review`, which
+  is the per-run *result* block in `plan.json`. Keys and how they cut review cost across a set:
+  `$SK/references/copy-review-lenses.md`.
 
 ## The Iron Rule
 
@@ -109,6 +113,21 @@ This is non-negotiable and survives every shortcut:
 
 Build the HTML, open it, **wait for "approve"** (or revisions). Then run.
 
+## The Copy Rule
+
+**NEVER render or overlay a line of user-facing text that has not passed adversarial review.**
+This binds the same way the Iron Rule does, and it binds the 0-credit overlay layer too:
+
+| Rationalization | Reality |
+|---|---|
+| "It's just an overlay, it costs 0 credits" | Free is not the same as compliant. `overlay.py` guarantees spelling and position; it has no opinion on whether the sentence can legally run. |
+| "The client wrote this copy, it's their risk" | The client is the reason to catch it. They handed it over expecting the pipeline to be a pipeline, not a photocopier. |
+| "It's a product shot, there's no claim in it" | Then the review is two lenses and finishes fast. Cheap is not a reason to skip; it's a reason not to fear it. |
+| "I'll review it after we see how it renders" | The render is the expensive half. Review is the cheap half. Doing the expensive half first inverts the entire skill. |
+| "The reviewers found nothing last batch" | Record that (`copy_review: {}`) and move on. A recorded clean pass and a skipped review must never look the same in `plan.html`. |
+
+`build_plan_html.py` enforces this rather than trusting the table above — see step 3.
+
 ## Workflow
 
 ```dot
@@ -118,6 +137,10 @@ digraph wf {
   "Brief + references" [shape=box];
   "Ingest + role-label refs" [shape=box];
   "Design pipeline (models, stages, verify, credits)" [shape=box];
+  "Plan contains copy?" [shape=diamond];
+  "Adversarial copy review (lenses -> refute)" [shape=box];
+  "Blockers survived?" [shape=diamond];
+  "Fix copy" [shape=box];
   "Build HTML preview + open it" [shape=box];
   "User approves?" [shape=diamond];
   "Execute stage" [shape=box];
@@ -127,7 +150,17 @@ digraph wf {
   "Done: log scores.md" [shape=doublecircle];
 
   "Name project + scaffold projects/<name>/" -> "User saves refs in projects/<name>/references/" -> "Brief + references";
-  "Brief + references" -> "Ingest + role-label refs" -> "Design pipeline (models, stages, verify, credits)" -> "Build HTML preview + open it" -> "User approves?";
+  "Brief + references" -> "Ingest + role-label refs";
+  "Ingest + role-label refs" -> "Design pipeline (models, stages, verify, credits)";
+  "Ingest + role-label refs" -> "Plan contains copy?" [label="fork: needs nothing from design"];
+  "Plan contains copy?" -> "Adversarial copy review (lenses -> refute)" [label="yes"];
+  "Plan contains copy?" -> "Build HTML preview + open it" [label="no"];
+  "Adversarial copy review (lenses -> refute)" -> "Blockers survived?";
+  "Blockers survived?" -> "Fix copy" [label="yes (<=2 rounds)"];
+  "Fix copy" -> "Adversarial copy review (lenses -> refute)";
+  "Blockers survived?" -> "Build HTML preview + open it" [label="no / waived in writing"];
+  "Design pipeline (models, stages, verify, credits)" -> "Build HTML preview + open it" [label="join"];
+  "Build HTML preview + open it" -> "User approves?";
   "User approves?" -> "Design pipeline (models, stages, verify, credits)" [label="revise"];
   "User approves?" -> "Execute stage" [label="approve"];
   "Execute stage" -> "Auto-verify vs spec";
@@ -142,6 +175,9 @@ digraph wf {
 ### 0. Name + scaffold the project (ALWAYS FIRST)
 - **Before anything else, agree on a project name** with the user (e.g. `flash_cards_v1`). If they
   didn't give one, propose a lowercase version-suffixed slug and confirm it.
+- **Ask whether the deliverables carry any user-facing text** (signage, labels, headlines, captions,
+  callouts, prices). Record the answer — it decides whether step 2.5 runs. Do not infer it later
+  from the prompts; a gate that decides for itself whether it applies is a gate that gets skipped.
 - Scaffold the folders:
   `mkdir -p projects/<project_name>/references projects/<project_name>/workflow projects/<project_name>/output`
 - **Tell the user to save their reference images in `projects/<project_name>/references/`** — that is
@@ -170,13 +206,44 @@ digraph wf {
   technical view, repeat hardest constraint at the end). Save each concrete prompt to
   `workflow/_prompts/` and record its template + `{PLACEHOLDERS}` + ref order in `style-spec.json`.
 
+### 2.5 Adversarial copy review (whenever the plan carries text)
+
+**`$SK/references/copy-review-lenses.md` is the authority** for which lenses to run, at what depth,
+when to escalate, what a finding must carry, and what is out of scope. Read it and follow it — the
+rules are not restated here, so this section and the reference can never disagree. This step can
+start as soon as step 1 has the copy; it needs nothing from step 2, so run it alongside the design
+work and join before step 3.
+
+- **Collect every line into `plan.json → copy`** — `id`, `text`, `surface` (`overlay` | `depicted` |
+  `caption`), `stage`. No copy? Omit both blocks and go to step 3.
+- **Demote before you review.** For every `depicted` line, ask whether `overlay.py` can composite it
+  instead. A depicted line costs credits and re-rolls for misspellings; an overlay line costs 0 and
+  cannot misspell. This is the only moment where every line, its wording and its placement are all
+  in hand, so it is the moment the demotion is decidable.
+- **Reuse before you spend.** Check `style-spec.json → copy_policy`: a line matching a
+  `cleared_templates` entry with every substitution inside the declared placeholder domain inherits
+  its status with no subagent. Only new or out-of-domain wording gets reviewed.
+- **Fan out one subagent per lens, in a single message so they run concurrently.** Give each the copy
+  block, the brief, the destination channel, and an instruction to cite live primary sources.
+- **Refute, also in a single message.** Dispatch each lens's skeptic as soon as that lens returns.
+  Only what survives refutation goes in the plan; a reviewer's own severity is a proposal.
+- **Write survivors to `plan.json → copy_review`** and set each `copy` line's `status`. Shape and
+  field meanings: the schema block at the top of `$SK/scripts/build_plan_html.py`.
+- **Fix and re-review, capped at 2 rounds.** Anything still open after round 2 goes to
+  `copy_review.unverified` with what would settle it, and the user decides at the gate.
+- **Lock the outcome into `style-spec.json → copy_policy`** so the rest of the set inherits it.
+
 ### 3. HTML preview (THE GATE)
 - Write the plan as `projects/<project_name>/plan.json` (schema in `$SK/scripts/build_plan_html.py`,
   worked example in `$SK/examples/plan.example.json`), then:
   `python "$SK/scripts/build_plan_html.py" projects/<project_name>/plan.json projects/<project_name>/plan.html`.
   Surface the absolute path (and on a desktop session, offer to open it — e.g. `start`/`open` the file).
   In a headless run, the path IS the deliverable.
-- Stop. Wait for approval or revisions. Loop back to step 2 on changes.
+- **Check the exit code.** `0` = approvable, written to `plan.html`. `2` = the copy gate is closed
+  (review not run, or a blocker survived): the page is written to `plan.BLOCKED.html` instead and
+  any stale `plan.html` is deleted, so an approvable artifact cannot exist while the gate is shut.
+  On a `2`, say which item is open, fix it, and rebuild. Never hand-edit the HTML to get past this.
+- Stop. Wait for approval or revisions. Loop back to step 2 on changes, or step 2.5 on copy changes.
 
 ### 4. Execute
 - Run renders per stage. Independent renders → background processes, tee to logs, poll for URLs
@@ -199,7 +266,8 @@ digraph wf {
 | Multi-ref render | `higgsfield generate create <model> --image A --image B --resolution 2k --aspect_ratio 4:3 --wait --prompt "…"` |
 | Self-test the toolchain (0 cr) | `python "$SK/scripts/build_plan_html.py" "$SK/examples/plan.example.json" /tmp/selftest.html` |
 | Scaffold a project | `mkdir -p projects/<name>/references projects/<name>/workflow projects/<name>/output` |
-| Build the preview gate | `python "$SK/scripts/build_plan_html.py" projects/<name>/plan.json projects/<name>/plan.html` |
+| Build the preview gate | `python "$SK/scripts/build_plan_html.py" projects/<name>/plan.json projects/<name>/plan.html` (exit 2 = copy gate closed) |
+| Copy-review lenses + depth | `$SK/references/copy-review-lenses.md` |
 | Dimension overlay (0 cr) | `python "$SK/scripts/overlay.py" dims in.png out.png dims.json` |
 | Annotation overlay (0 cr) | `python "$SK/scripts/overlay.py" annotate in.png out.png annos.json` |
 
@@ -214,6 +282,9 @@ digraph wf {
 - **Not persisting decisions to `style-spec.json`.** Re-asking settled choices or re-measuring overlay
   coords on every run. Read it on start, write to it on every lock — it's how a set scales cheaply.
 - **Rendering before the HTML gate.** The #1 violation. Always preview, always wait.
+- **Copy shortcuts.** The 0-credit overlay layer is in scope, the refute pass is not optional,
+  irrelevant lenses are worse than none, and `NOT-VERIFIED` is not a reason to drop a finding —
+  see `$SK/references/copy-review-lenses.md`.
 - **Un-roled references** dumped into one prompt → muddy fusion. Label every image.
 - **Re-generating a design downstream** instead of feeding the approved anchor as identity → drift + wasted credits.
 - **Letting the image model type dimensions/menus/labels.** Misspells, costs credits. Use `overlay.py`.

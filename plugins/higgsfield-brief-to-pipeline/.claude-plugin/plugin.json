@@ -1,6 +1,6 @@
 {
   "name": "higgsfield-brief-to-pipeline",
-  "version": "1.0.2",
+  "version": "1.1.1",
   "description": "Turns a brief plus a folder of reference images into an optimal, credit-aware Higgsfield pipeline. Shows an HTML process preview as a mandatory approval gate before spending any credits, then executes stage-by-stage with auto-verification, human gates, and zero-credit deterministic text/dimension overlays.",
   "skills": "./skills/",
   "author": {

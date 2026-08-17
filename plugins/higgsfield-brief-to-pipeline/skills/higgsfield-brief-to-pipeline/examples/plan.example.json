@@ -96,5 +96,66 @@
     "2k everywhere except the single 4k hero composite"
   ],
 
-  "credit_estimate": { "min": 22, "max": 30, "budget": 200 }
+  "credit_estimate": { "min": 22, "max": 30, "budget": 200 },
+
+  "copy": [
+    { "id": "fascia-1", "text": "Australia's freshest coffee", "surface": "depicted", "stage": "2", "status": "FIX" },
+    { "id": "fascia-2", "text": "Open 7 days", "surface": "depicted", "stage": "2", "status": "FIX" },
+    { "id": "callout-1", "text": "Counter height 1050", "surface": "overlay", "stage": "5", "status": "FIX" },
+    { "id": "callout-2", "text": "Timber slat fascia — new finish", "surface": "overlay", "stage": "5", "status": "SHIP" }
+  ],
+
+  "copy_review": {
+    "lenses": ["L3 claim substantiation", "L4 brand and legal"],
+    "refuted": 4,
+    "findings": [
+      {
+        "id": "f1",
+        "severity": "high",
+        "affects": ["fascia-1"],
+        "rule": "Australian Consumer Law s18 and s29(1)(g) — misleading representations about the standard or quality of goods",
+        "source": "https://www.australiancontractlaw.info/legislation/acl/s29",
+        "quote": "Australia's freshest coffee",
+        "why": "A superlative that names a measurable attribute against every competitor in the country. It is rendered into the signage by the image model, so it ships on the landlord submission and on the built kiosk. The client holds no substantiation.",
+        "fix": "Roasted weekly in [suburb]. Specific, verifiable, and stronger as copy."
+      },
+      {
+        "id": "f2",
+        "severity": "medium",
+        "affects": ["fascia-2"],
+        "rule": "ACL s18 — conduct likely to mislead, read with the centre's tenancy lease",
+        "source": "NOT-VERIFIED",
+        "quote": "Open 7 days",
+        "why": "Trading hours in an enclosed centre are set by the lease, not by the tenant. Rendering this into permanent signage commits the operator to hours they may not control, in a document going to the landlord for approval.",
+        "fix": "Confirm permitted trading hours against the lease before this is rendered. Omit from the submission if unresolved."
+      },
+      {
+        "id": "f3",
+        "severity": "low",
+        "affects": ["callout-1"],
+        "rule": "Internal drawing standard — dimensions carry units",
+        "source": "project spec",
+        "quote": "Counter height 1050",
+        "why": "An unlabelled dimension on a landlord-facing elevation is read as whatever the reader assumes. Free to fix in the overlay config.",
+        "fix": "Counter height 1050 mm"
+      }
+    ],
+    "unverified": [
+      {
+        "question": "Does the centre's tenancy design guide cap fascia text height or restrict signage typefaces?",
+        "settled_by": "The centre's tenancy design guidelines, from the landlord's leasing contact. Decides whether the fascia copy fits at all before it is rendered."
+      },
+      {
+        "question": "Permitted trading hours under the lease",
+        "settled_by": "The executed lease. Blocks fascia-2."
+      }
+    ],
+    "disagreements": [
+      {
+        "issue": "Whether \"Australia's freshest coffee\" is actionable or mere puffery",
+        "call": "Actionable. Puffery survives where no reasonable consumer would read a claim as factual, and freshness is a measurable attribute with a comparative superlative attached. Kept at high, not dropped."
+      }
+    ],
+    "waived": []
+  }
 }
